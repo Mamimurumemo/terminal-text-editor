@@ -1,20 +1,32 @@
+/*** includes ***/
+
+#include <asm-generic/errno-base.h>
+#include <errno.h>
 #include <termios.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdio.h>
 
+/*** data ***/
+
 struct termios orig_termios;
 
+/*** prototype functions ***/
+
+void die(const char *s);
 void disableRawMode();
 void enableRawMode();
+
+/*** init ***/
+
 int main(){
 	enableRawMode();
 
 	while (1){
 		
 		char c = '\0';
-		read(STDIN_FILENO, &c, 1);
+		if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
 		if (iscntrl(c)) {
 		// iscontrol checks if a pressed char is a control char(arrow keys etc.)
 			printf("%d\r\n", c);
@@ -29,8 +41,11 @@ int main(){
 	}
 	return 0;
 }
+
+/*** terminal ***/
+
 void enableRawMode(){
-	tcgetattr(STDIN_FILENO, &orig_termios);
+	if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) die("tcgetattr");
 	// reads terminal attributes into termios struc
 	atexit(disableRawMode);
 	// at exit we restore users terminal
@@ -54,10 +69,17 @@ void enableRawMode(){
 	raw.c_cc[VTIME] = 1;
 	// vtime sets the max amount of time wait before read() returns, setting it to 1 measn 100 miliseconds
 	// if the user waits more than 100 miliseconds program returns 0
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcgetattr");
 	// this applies them to the terminal
 
 }
 void disableRawMode(){
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) die("tcgetattr");
+	// disables raw mode and has error handling due to == -1
 }
+
+void die(const char *s){
+	perror(s);
+	exit(1);
+	// standard error handling
+}	
