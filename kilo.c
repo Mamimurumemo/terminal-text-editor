@@ -11,16 +11,20 @@ void enableRawMode();
 int main(){
 	enableRawMode();
 
-	char c;
-	while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q'){
+	while (1){
+		
+		char c = '\0';
+		read(STDIN_FILENO, &c, 1);
 		if (iscntrl(c)) {
 		// iscontrol checks if a pressed char is a control char(arrow keys etc.)
-			printf("%d\n", c);
+			printf("%d\r\n", c);
 		}
+		// \r\n is for fixing terminal \n
 		else {
-			printf("%d ('%c')\n", c, c);
+			printf("%d ('%c')\r\n", c, c);
 		// %c is for writing out the bytes of a char
 		}
+		if (c == 'q') break;
 		// pressing q exits program while loop only works until q is pressed
 	}
 	return 0;
@@ -32,9 +36,24 @@ void enableRawMode(){
 	// at exit we restore users terminal
 	struct termios raw = orig_termios;
 	// create a termips struct for operations
-	raw.c_lflag &= ~(ECHO | ICANON);
+	raw.c_oflag &= ~(OPOST);
+	// fixes \n for terminal
+	raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+	// icrnl turns fixes ctrl m
+	// ıxon turns off ctrl s and ctrl q
+	// everything else is misc.
+	raw.c_cflag |= (CS8);
+	// misc.
+	raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
 	// c_lfag is for local flags, we want to disable ECHO since it's responsible for displaying text as you type
 	// ıcannon turns cannonical mode off
+	// ısıg turns off terminal shortcuts like ctrl c and ctrl z
+	// iexten turns off crtl v
+	raw.c_cc[VMIN] = 0;
+	// vmin is for min. number of bytes of input before read() can return, setting it to 0 makes it instant
+	raw.c_cc[VTIME] = 1;
+	// vtime sets the max amount of time wait before read() returns, setting it to 1 measn 100 miliseconds
+	// if the user waits more than 100 miliseconds program returns 0
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 	// this applies them to the terminal
 
