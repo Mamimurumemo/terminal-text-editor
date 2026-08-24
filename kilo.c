@@ -7,7 +7,7 @@ struct termios orig_termios;
 void disableRawMode(){
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
 }	
-
+// git
 void enableRawMode(){
 	tcgetattr(STDIN_FILENO, &orig_termios);
 	// reads terminal attributes into termios struc
