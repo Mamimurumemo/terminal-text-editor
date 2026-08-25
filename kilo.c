@@ -8,6 +8,11 @@
 #include <ctype.h>
 #include <stdio.h>
 
+/*** defines ***/
+
+#define CTRL_KEY(k) ((k) & 0x1f)
+// defining ctrl q for quit
+
 /*** data ***/
 
 struct termios orig_termios;
@@ -36,8 +41,8 @@ int main(){
 			printf("%d ('%c')\r\n", c, c);
 		// %c is for writing out the bytes of a char
 		}
-		if (c == 'q') break;
-		// pressing q exits program while loop only works until q is pressed
+		if (c == CTRL_KEY('q')) break;
+		// pressing ctrl q exits program while loop only works until q is pressed
 	}
 	return 0;
 }
