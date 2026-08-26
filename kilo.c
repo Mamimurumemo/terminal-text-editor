@@ -19,30 +19,22 @@ struct termios orig_termios;
 
 /*** prototype functions ***/
 
+void editorRefreshScreen();
 void die(const char *s);
 void disableRawMode();
 void enableRawMode();
+void editorProcessKeypress();
+char editorReadKey();
 
 /*** init ***/
 
 int main(){
+	
+	editorRefreshScreen();
 	enableRawMode();
 
 	while (1){
-		
-		char c = '\0';
-		if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-		if (iscntrl(c)) {
-		// iscontrol checks if a pressed char is a control char(arrow keys etc.)
-			printf("%d\r\n", c);
-		}
-		// \r\n is for fixing terminal \n
-		else {
-			printf("%d ('%c')\r\n", c, c);
-		// %c is for writing out the bytes of a char
-		}
-		if (c == CTRL_KEY('q')) break;
-		// pressing ctrl q exits program while loop only works until q is pressed
+		editorProcessKeypress();
 	}
 	return 0;
 }
@@ -87,4 +79,36 @@ void die(const char *s){
 	perror(s);
 	exit(1);
 	// standard error handling
+}
+
+char editorReadKey(){
+	int nread;
+	char c;
+	while ((nread = read(STDIN_FILENO, &c, 1)) != 1){
+		if (nread == -1 && errno != EAGAIN) die("read");
+	}
+	return c;
+// this func just waits for one keypress and returns it
+}	
+
+/*** input ***/
+
+void editorProcessKeypress(){
+	char c = editorReadKey();
+
+	switch (c) {
+		case CTRL_KEY('q'):
+			exit(0);
+			break;	
+	}
+// waits for keypress and handles it accordingly
+}	
+
+/*** output ***/
+
+void editorRefreshScreen(){
+	write(STDOUT_FILENO, "\x1b[2j", 4);
+// 4 means we are expecting 4 bytes, \x1b is the escape char [ is required for it j is for clearing the screen and 2 is it's arqument which says the entire screen
+	write(STDOUT_FILENO, "\x1b[H", 3);
+// we expect 3 bytes H is for repositioning the cursor it normally takes 2 arquments which are row and collum but since both are 1 as default we don't need to change them we could have used 12;40H for row and column
 }	
