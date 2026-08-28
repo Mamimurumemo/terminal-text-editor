@@ -9,8 +9,11 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 /*** defines ***/
+
+#define KILO_VERSION "0.0.1"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -25,6 +28,16 @@ struct editorConfig {
 };	
 struct editorConfig E;
 
+struct abuf {
+	char *b;
+	int len;
+//this is a append buffer, since c does not have dynamic strings we need this
+};
+
+#define ABUF_INIT {NULL, 0}
+// this is a empty buffer
+
+
 /*** prototype functions ***/
 
 int getWindowSize(int *rows, int *cols);
@@ -35,6 +48,7 @@ void enableRawMode();
 void editorProcessKeypress();
 char editorReadKey();
 int getCursorPosition(int *rows, int *cols);
+void editorDrawRows(struct abuf *ab);
 
 /*** init ***/
 
@@ -129,7 +143,7 @@ int getCursorPosition(int *rows, int *cols){
 int getWindowSize(int *rows, int *cols){
 	struct winsize ws;
 
-	if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)== -1 || ws.ws_col == 0) {
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)== -1 || ws.ws_col == 0) {
 		if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
 		return getCursorPosition(rows, cols);
 // second if is backup method, C is for moving cursor to right B moves it down 999 is the amount
@@ -145,6 +159,24 @@ int getWindowSize(int *rows, int *cols){
 	return 0;
 // on succcess we pass the values back by using pointers
 	}
+}	
+
+/*** append buffer ***/
+
+void abAppend(struct abuf *ab, const char *s, int len){
+	char *newString = realloc(ab->b, ab->len + len);
+
+	if (newString == NULL) return;
+	memcpy(&newString[ab->len], s, len);
+	ab->b = newString;
+	ab->len += len;
+// to append a string s to an abuf we first need the memory, realloc gives us a memory block the size of current string + the size of the string we are appending
+// memcpy copies the current string s after the end of the current data in the buffer
+}
+
+void abFree(struct abuf *ab){
+	free(ab->b);
+// abfree is a destructor that deallocates the dynamic memory used by abuf
 }	
 
 /*** input ***/
@@ -164,21 +196,45 @@ void editorProcessKeypress(){
 
 /*** output ***/
 
-void editorDrawRows(){
-	int y;
-	for (y = 0; y < E.screenrows; y++) {
-		write(STDOUT_FILENO, "~\r\n", 3);
-	}
-// we print a ~ at the start of each line y represents rows
-}	
+void editorDrawRows(struct abuf *ab) {
+  int y;
+  for (y = 0; y < E.screenrows; y++) {
+    if (y == E.screenrows / 3) {
+      char welcome[80];
+      int welcomelen = snprintf(welcome, sizeof(welcome),
+        "Kilo editor -- version %s", KILO_VERSION);
+      if (welcomelen > E.screencols) welcomelen = E.screencols;
+      int padding = (E.screencols - welcomelen) / 2;
+      if (padding) {
+        abAppend(ab, "~", 1);
+        padding--;
+      }
+      while (padding--) abAppend(ab, " ", 1);
+      abAppend(ab, welcome, welcomelen);
+    } else {
+      abAppend(ab, "~", 1);
+    }
+    abAppend(ab, "\x1b[K", 3);
+    if (y < E.screenrows - 1) {
+      abAppend(ab, "\r\n", 2);
+    }
+  }
+}
 
 void editorRefreshScreen(){
-	write(STDOUT_FILENO, "\x1b[2J", 4);
-// 4 means we are expecting 4 bytes, \x1b is the escape char [ is required for it j is for clearing the screen and 2 is it's arqument which says the entire screen
-	write(STDOUT_FILENO, "\x1b[H", 3);
-// we expect 3 bytes H is for repositioning the cursor it normally takes 2 arquments which are row and collum but since both are 1 as default we don't need to change them we could have used 12;40H for row and column
-	editorDrawRows();
+	struct abuf ab = ABUF_INIT;
 
-	write(STDOUT_FILENO, "\x1b[H", 3);
+	abAppend(&ab, "\x1b[?25l", 6);
+// l and v below are for hiding the cursor while refreshing
+
+	abAppend(&ab, "\x1b[H", 3);
+// we expect 3 bytes H is for repositioning the cursor it normally takes 2 arquments which are row and collum but since both are 1 as default we don't need to change them we could have used 12;40H for row and column
+	editorDrawRows(&ab);
+
+	abAppend(&ab, "\x1b[H", 3);
+	abAppend(&ab, "\x1b[?25h", 6);
+
+	write(STDOUT_FILENO, ab.b, ab.len);
+	abFree(&ab);
 // after drawing ~'s we reposition the cursor
 }	
